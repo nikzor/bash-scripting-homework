@@ -1,0 +1,77 @@
+#!/bin/bash
+
+interrupted=0
+trap 'printf "\nДля выхода введите q или Q.\n"; interrupted=1' INT
+
+# Первая цифра не может быть нулём, остальные не повторяются.
+secret=$((RANDOM % 9 + 1))
+while (( ${#secret} < 4 )); do
+    digit=$((RANDOM % 10))
+    if [[ "$secret" != *"$digit"* ]]; then
+        secret+=$digit
+    fi
+done
+
+history=()
+step=1
+cat <<'INTRO'
+********************************************************************************
+* Я загадал 4-значное число с неповторяющимися цифрами. На каждом ходу делайте *
+* попытку отгадать загаданное число. Попытка - это 4-значное число с *
+* неповторяющимися цифрами. *
+********************************************************************************
+INTRO
+
+while :; do
+    interrupted=0
+    if ! IFS= read -r -p "Попытка $step: " guess; then
+        if (( interrupted )); then
+            continue
+        fi
+        echo
+        exit 1
+    fi
+    case "$guess" in
+        q|Q) exit 1 ;;
+    esac
+
+    if [[ ! "$guess" =~ ^[1-9][0-9]{3}$ ]]; then
+        echo "Ошибка: введите 4-значное число без ведущего нуля и повторяющихся цифр."
+        continue
+    fi
+
+    seen=""
+    for ((i = 0; i < 4; i++)); do
+        digit=${guess:i:1}
+        if [[ "$seen" == *"$digit"* ]]; then
+            break
+        fi
+        seen+=$digit
+    done
+    if (( ${#seen} != 4 )); then
+        echo "Ошибка: цифры не должны повторяться."
+        continue
+    fi
+
+    cows=0
+    bulls=0
+    for ((i = 0; i < 4; i++)); do
+        digit=${guess:i:1}
+        if [[ "$digit" == "${secret:i:1}" ]]; then
+            bulls=$((bulls + 1))
+        elif [[ "$secret" == *"$digit"* ]]; then
+            cows=$((cows + 1))
+        fi
+    done
+
+    echo "Коров - $cows Быков - $bulls"
+    history+=("$step. $guess (Коров - $cows Быков - $bulls)")
+    echo "История ходов:"
+    printf '%s\n' "${history[@]}"
+
+    if (( bulls == 4 )); then
+        echo "Вы угадали загаданное число: $secret!"
+        exit 0
+    fi
+    step=$((step + 1))
+done

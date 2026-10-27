@@ -1,0 +1,37 @@
+#!/bin/bash
+
+if (( $# != 1 )); then
+    echo "Использование: $0 каталог" >&2
+    exit 1
+fi
+if [[ ! -d "$1" ]]; then
+    echo "Ошибка: это не каталог: $1" >&2
+    exit 1
+fi
+
+dir=$(cd -- "$1" && pwd -P) || exit 1
+user_name=$(id -un) || exit 1
+today=$(date +%Y-%m-%d) || exit 1
+header="Approved $user_name $today"
+status=0
+temp_file=''
+trap '[[ -z "$temp_file" ]] || rm -f -- "$temp_file"' EXIT
+
+shopt -s nullglob dotglob
+for file in "$dir"/*.txt; do
+    [[ -f "$file" && ! -L "$file" ]] || continue
+
+    temp_file=$(mktemp) || exit 1
+    if { printf '%s\n' "$header" && cat -- "$file"; } > "$temp_file"; then
+        # Записываем в тот же файл, сохраняя его права доступа.
+        if ! cat -- "$temp_file" > "$file"; then
+            status=1
+        fi
+    else
+        status=1
+    fi
+    rm -f -- "$temp_file"
+    temp_file=''
+done
+
+exit "$status"

@@ -1,0 +1,49 @@
+#!/bin/bash
+
+if (( $# != 3 )); then
+    echo "Использование: $0 каталог старый_суффикс новый_суффикс" >&2
+    exit 1
+fi
+
+dir=$1
+old=$2
+new=$3
+
+if [[ ! -d "$dir" ]]; then
+    echo "Ошибка: это не каталог: $dir" >&2
+    exit 1
+fi
+
+for suffix in "$old" "$new"; do
+    if [[ "$suffix" != .* || "${suffix:1}" == *.* || "$suffix" == */* ]]; then
+        echo "Ошибка: суффикс должен начинаться с точки и не содержать других точек или /: $suffix" >&2
+        exit 1
+    fi
+done
+
+dir=$(cd -- "$dir" && pwd -P) || exit 1
+status=0
+
+while IFS= read -r -d '' file; do
+    name=${file##*/}
+
+    # Начальная точка скрытого файла сама по себе не образует суффикс.
+    [[ "$name" == *"$old" && "$name" != "$old" ]] || continue
+
+    # Раскрытие параметра с заменой суффикса только в конце имени.
+    new_name=${name/%"$old"/"$new"}
+    target=${file%/*}/$new_name
+    [[ "$file" != "$target" ]] || continue
+
+    if [[ -e "$target" || -L "$target" ]]; then
+        echo "Ошибка: имя уже занято: $target" >&2
+        status=1
+        continue
+    fi
+
+    if ! mv -- "$file" "$target"; then
+        status=1
+    fi
+done < <(find "$dir" -type f -print0)
+
+exit "$status"

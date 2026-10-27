@@ -1,0 +1,111 @@
+#!/bin/bash
+
+board=(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 0)
+empty=15
+moves=0
+
+show_board() {
+    echo '+-------------------+'
+    for ((i = 0; i < 16; i++)); do
+        value=${board[i]}
+        if (( value == 0 )); then
+            value=''
+        fi
+        printf '| %2s ' "$value"
+        if (( i % 4 == 3 )); then
+            printf '|\n'
+            if (( i == 15 )); then
+                echo '+-------------------+'
+            else
+                echo '|-------------------|'
+            fi
+        fi
+    done
+}
+
+# Индексы соседей пустой ячейки.
+find_neighbors() {
+    neighbors=()
+    if (( empty >= 4 )); then neighbors+=($((empty - 4))); fi
+    if (( empty < 12 )); then neighbors+=($((empty + 4))); fi
+    if (( empty % 4 > 0 )); then neighbors+=($((empty - 1))); fi
+    if (( empty % 4 < 3 )); then neighbors+=($((empty + 1))); fi
+}
+
+is_solved() {
+    for ((j = 0; j < 15; j++)); do
+        if (( board[j] != j + 1 )); then
+            return 1
+        fi
+    done
+    return 0
+}
+
+# Перемешиваем допустимыми ходами, чтобы поле оставалось решаемым.
+for ((shuffle = 0; shuffle < 1000; shuffle++)); do
+    find_neighbors
+    index=${neighbors[RANDOM % ${#neighbors[@]}]}
+    board[empty]=${board[index]}
+    board[index]=0
+    empty=$index
+done
+
+# Не начинаем игру с уже собранного поля.
+if is_solved; then
+    board[15]=15
+    board[14]=0
+    empty=14
+fi
+
+while :; do
+    echo "Ход № $((moves + 1))"
+    show_board
+    find_neighbors
+
+    while :; do
+        if ! IFS= read -r -p 'Ваш ход (q - выход): ' input; then
+            echo
+            exit 0
+        fi
+        if [[ "$input" == q ]]; then
+            exit 0
+        fi
+
+        index=-1
+        if [[ "$input" =~ ^([1-9]|1[0-5])$ ]]; then
+            for neighbor in "${neighbors[@]}"; do
+                if [[ "${board[neighbor]}" == "$input" ]]; then
+                    index=$neighbor
+                    break
+                fi
+            done
+        fi
+
+        if (( index >= 0 )); then
+            break
+        fi
+
+        echo "Ход № $((moves + 1))"
+        show_board
+        echo 'Неверный ход!'
+        printf 'Невозможно костяшку %s передвинуть на пустую ячейку.\n' "$input"
+        printf 'Можно выбрать: '
+        separator=''
+        for neighbor in "${neighbors[@]}"; do
+            printf '%s%s' "$separator" "${board[neighbor]}"
+            separator=', '
+        done
+        printf '\n'
+    done
+
+    board[empty]=${board[index]}
+    board[index]=0
+    empty=$index
+    moves=$((moves + 1))
+
+    if is_solved; then
+        echo "Вы собрали головоломку за $moves ходов."
+        show_board
+        exit 0
+    fi
+done

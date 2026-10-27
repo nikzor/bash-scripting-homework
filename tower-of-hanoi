@@ -1,0 +1,70 @@
+#!/bin/bash
+
+stacks=(87654321 '' '')
+step=1
+interrupted=0
+trap 'printf "\nДля выхода введите q или Q.\n"; interrupted=1' INT
+
+show_stacks() {
+    local row column stack position
+    for ((row = 0; row < 8; row++)); do
+        for ((column = 0; column < 3; column++)); do
+            stack=${stacks[column]}
+            position=$((7 - row))
+            if (( position < ${#stack} )); then
+                printf '|%s|' "${stack:position:1}"
+            else
+                printf '| |'
+            fi
+            (( column == 2 )) || printf ' '
+        done
+        printf '\n'
+    done
+    printf '+-+ +-+ +-+\nA B C\n'
+}
+
+show_stacks
+while :; do
+    interrupted=0
+    if ! IFS= read -r -p "Ход № $step (откуда, куда): " input; then
+        if (( interrupted )); then
+            continue
+        fi
+        echo
+        exit 1
+    fi
+    case "$input" in
+        q|Q) exit 1 ;;
+    esac
+
+    if [[ ! "$input" =~ ^[[:space:]]*([AaBbCc])[[:space:]]*([AaBbCc])[[:space:]]*$ ]]; then
+        echo 'Ошибка: введите имена двух стеков A, B, C или q/Q для выхода.'
+        continue
+    fi
+    case "${BASH_REMATCH[1]}" in
+        A|a) source=0 ;; B|b) source=1 ;; C|c) source=2 ;;
+    esac
+    case "${BASH_REMATCH[2]}" in
+        A|a) target=0 ;; B|b) target=1 ;; C|c) target=2 ;;
+    esac
+    source_stack=${stacks[source]}
+    target_stack=${stacks[target]}
+    if (( source == target )) || [[ -z "$source_stack" ]]; then
+        echo 'Такое перемещение запрещено!'
+        continue
+    fi
+    disk=${source_stack: -1}
+    if [[ -n "$target_stack" ]] && (( disk > ${target_stack: -1} )); then
+        echo 'Такое перемещение запрещено!'
+        continue
+    fi
+
+    stacks[source]=${source_stack%?}
+    stacks[target]=$target_stack$disk
+    show_stacks
+    if [[ "${stacks[1]}" == 87654321 || "${stacks[2]}" == 87654321 ]]; then
+        echo "Вы победили за $step ходов!"
+        exit 0
+    fi
+    step=$((step + 1))
+done

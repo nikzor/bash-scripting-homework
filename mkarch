@@ -1,0 +1,67 @@
+#!/bin/bash
+set -e
+set -o pipefail
+
+usage() {
+    echo "Использование: $0 -d dir_path -n name" >&2
+    exit 1
+}
+
+dir=''
+name=''
+while getopts ':d:n:' option; do
+    case "$option" in
+        d) dir=$OPTARG ;;
+        n) name=$OPTARG ;;
+        *) usage ;;
+    esac
+done
+shift $((OPTIND - 1))
+
+[[ -n "$dir" && -n "$name" && $# == 0 ]] || usage
+if [[ ! -d "$dir" ]]; then
+    echo "Ошибка: каталог не найден: $dir" >&2
+    exit 1
+fi
+case "$name" in
+    */*|.|..) echo 'Ошибка: укажите имя архива без пути.' >&2; exit 1 ;;
+esac
+if [[ -e "./$name" || -L "./$name" ]]; then
+    echo "Ошибка: файл уже существует: $name" >&2
+    exit 1
+fi
+
+temp_dir=$(mktemp -d)
+trap 'rm -rf -- "$temp_dir"' EXIT
+
+# Упаковываем содержимое, включая скрытые файлы и подкаталоги.
+# Создаём итоговый файл после упаковки, чтобы он не попал сам в себя.
+tar -czf "$temp_dir/data.tar.gz" -C "$dir" .
+
+cat > "$temp_dir/unpack" <<'HEADER'
+#!/bin/bash
+set -e
+set -o pipefail
+
+out='.'
+while getopts ':o:' option; do
+    case "$option" in
+        o) out=$OPTARG ;;
+        *) echo "Использование: $0 [-o unpackdir]" >&2; exit 1 ;;
+    esac
+done
+shift $((OPTIND - 1))
+if [[ $# != 0 || -z "$out" ]]; then
+    echo "Использование: $0 [-o unpackdir]" >&2
+    exit 1
+fi
+
+mkdir -p -- "$out"
+base64 -d <<'ARCHIVE_DATA' | tar -xz -C "$out"
+HEADER
+
+base64 < "$temp_dir/data.tar.gz" >> "$temp_dir/unpack"
+printf '\nARCHIVE_DATA\n' >> "$temp_dir/unpack"
+chmod a+x "$temp_dir/unpack"
+mv -- "$temp_dir/unpack" "./$name"
+echo "Архив создан: ./$name"
